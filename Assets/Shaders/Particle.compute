@@ -1,0 +1,192 @@
+#pragma kernel CSMain
+
+#include "Packages/com.unity.render-pipelines.core/ShaderLibrary/Common.hlsl"
+#include "Packages/com.unity.render-pipelines.core/ShaderLibrary/Sampling/Sampling.hlsl"
+
+struct Particle
+{
+    float3 position;
+    float3 velocity;
+    float age;
+    uint randomState;
+};
+
+RWStructuredBuffer<Particle> particles;
+StructuredBuffer<float4> d20Planes;
+
+float deltaTime;
+uint particleCount;
+int d20PlaneCount;
+float4x4 d20WorldToLocal;
+float4x4 prevD20WorldToLocal;
+float4x4 d20LocalToWorld;
+float3 spawnCenter;
+float spawnDistance;
+float minSpeed;
+float maxSpeed;
+float particleLifetime;
+
+static const float CollisionSkin = 0.05f;
+static const float Bounciness = 0.8f;
+
+// Respawn the particle on the spawn sphere with a random inward velocity and reset its age.
+void SpawnParticle(inout Particle p)
+{
+    float u1 = GenerateHashedRandomFloat(XorShift(p.randomState));
+    float u2 = GenerateHashedRandomFloat(XorShift(p.randomState));
+    float speed = lerp(minSpeed, maxSpeed, GenerateHashedRandomFloat(XorShift(p.randomState)));
+    float3 direction = SampleSphereUniform(u1, u2);
+
+    p.position = spawnCenter + direction * spawnDistance;
+    p.velocity = -direction * speed;
+    p.age = 0.0f;
+}
+
+// Find where a local-space movement segment starting outside the D20 object intersects its surface.
+bool IntersectSegmentWithD20(float3 origin, float3 direction, out float hitTime, out float3 localNormal)
+{
+    hitTime = 0.0f;
+    localNormal = 0.0f;
+    float exitTime = 1.0f;
+
+    for (int i = 0; i < d20PlaneCount; i++)
+    {
+        float4 plane = d20Planes[i];
+        float distance = dot(plane.xyz, origin) + plane.w;
+        float speed = dot(plane.xyz, direction);
+
+        if (abs(speed) < 0.000001f)
+        {
+            if (distance > 0.0f)
+            {
+                return false;
+            }
+
+            continue;
+        }
+
+        float planeTime = -distance / speed;
+
+        if (speed < 0.0f)
+        {
+            if (planeTime > hitTime)
+            {
+                hitTime = planeTime;
+                localNormal = plane.xyz;
+            }
+        }
+        else if (planeTime < exitTime)
+        {
+            exitTime = planeTime;
+        }
+
+        if (hitTime > exitTime)
+        {
+            return false;
+        }
+    }
+
+    return hitTime > 0.0f;
+}
+
+// Check if a local point is inside the D20 object; if so, output the nearest face normal and signed distance.
+bool FindContainingFace(float3 samplePosition, out float3 localNormal, out float signedDistance)
+{
+    localNormal = 0.0f;
+    signedDistance = -1.0e+30f;
+
+    for (int i = 0; i < d20PlaneCount; i++)
+    {
+        float4 plane = d20Planes[i];
+        float distance = dot(plane.xyz, samplePosition) + plane.w;
+
+        if (distance > 0.0f)
+        {
+            return false;
+        }
+
+        if (distance > signedDistance)
+        {
+            signedDistance = distance;
+            localNormal = plane.xyz;
+        }
+    }
+
+    return true;
+}
+
+// Transform a D20 object local-space normal to world space and normalize it.
+float3 LocalNormalToWorld(float3 localNormal)
+{
+    return normalize(mul(transpose((float3x3)d20WorldToLocal), localNormal));
+}
+
+// Reflect inward velocity off the surface and apply bounciness.
+void BounceVelocity(inout float3 velocity, float3 worldNormal)
+{
+    if (dot(velocity, worldNormal) < 0.0f)
+    {
+        velocity = reflect(velocity, worldNormal) * Bounciness;
+    }
+}
+
+// Advance one particle, respawn it when expired, and resolve collisions with the D20 object.
+[numthreads(256, 1, 1)]
+void CSMain(uint3 id : SV_DispatchThreadID)
+{
+    if (id.x >= particleCount)
+    {
+        return;
+    }
+
+    Particle p = particles[id.x];
+
+    p.age += deltaTime;
+    if (p.age < 0.0f)
+    {
+        particles[id.x] = p;
+        return;
+    }
+    if (p.age >= particleLifetime)
+    {
+        SpawnParticle(p);
+        particles[id.x] = p;
+        return;
+    }
+
+    float3 prevPosition = p.position;
+    float3 nextPosition = prevPosition + p.velocity * deltaTime;
+
+    float3 localStart = mul(prevD20WorldToLocal, float4(prevPosition, 1.0f)).xyz;
+    float3 localEnd = mul(d20WorldToLocal, float4(nextPosition, 1.0f)).xyz;
+    float3 localDirection = localEnd - localStart;
+    float hitTime = 0.0f;
+    float3 localNormal = 0.0f;
+    float signedDistance;
+
+    if (IntersectSegmentWithD20(localStart, localDirection, hitTime, localNormal))
+    {
+        float3 worldNormal = LocalNormalToWorld(localNormal);
+        float3 collisionPoint = lerp(prevPosition, nextPosition, hitTime);
+
+        BounceVelocity(p.velocity, worldNormal);
+
+        nextPosition = collisionPoint + worldNormal * CollisionSkin + p.velocity * (deltaTime * (1.0f - hitTime));
+    }
+
+    float3 finalLocalPosition = mul(d20WorldToLocal, float4(nextPosition, 1.0f)).xyz;
+
+    if (FindContainingFace(finalLocalPosition, localNormal, signedDistance))
+    {
+        float3 worldNormal = LocalNormalToWorld(localNormal);
+        float3 localSurface = finalLocalPosition - localNormal * signedDistance;
+
+        BounceVelocity(p.velocity, worldNormal);
+
+        nextPosition = mul(d20LocalToWorld, float4(localSurface, 1.0f)).xyz + worldNormal * CollisionSkin;
+    }
+
+    p.position = nextPosition;
+
+    particles[id.x] = p;
+}
