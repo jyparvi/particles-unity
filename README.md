@@ -1,6 +1,6 @@
 # Unity GPU Particles
 
-A particle simulation in Unity using compute shaders and the Universal Render Pipeline (URP). Particles spawn on a sphere, move inward, and bounce off a rotating D20 object.
+A particle simulation in Unity using compute shaders and the Universal Render Pipeline (URP). Particles bounce off a rotating D20 object and respawn on an outer sphere.
 
 ![500 glowing particles around the D20 object](docs/images/1.png)
 
@@ -9,7 +9,8 @@ A particle simulation in Unity using compute shaders and the Universal Render Pi
 ## Features
 
 - GPU particle simulation and collisions with the D20 object.
-- Automatic respawning when a particle's lifetime expires.
+- GPU initialization with random positions and velocities on startup and particle-count changes.
+- Automatic respawning on the outer sphere when a particle reaches it moving outward.
 - Camera-facing particle billboards with velocity-based stretching.
 - Particle colors based on distance to the D20 object's surface.
 - Adjustable particle glow, bloom, and film grain.
@@ -51,7 +52,7 @@ Changing Particle Count recreates the particle buffer and restarts the particles
 | File | Purpose |
 | --- | --- |
 | [ParticleController.cs](Assets/Scripts/ParticleController.cs) | Initializes GPU buffers, extracts D20 collision planes, updates settings, dispatches the simulation, and draws the particles and FPS display. |
-| [Particle.compute](Assets/Shaders/Particle.compute) | Updates particle positions and ages, respawns particles, and resolves D20 collisions on the GPU. |
+| [Particle.compute](Assets/Shaders/Particle.compute) | Initializes particles, updates their positions, respawns them at the outer sphere, and resolves D20 collisions on the GPU. |
 | [Particle.shader](Assets/Shaders/Particle.shader) | Creates particle billboards and applies stretching, surface-distance colors, glow, and soft circular edges. |
 
-Particle positions and velocities are stored in a GPU buffer. The D20 object's mesh faces are converted to local-space planes at startup for collision checks. Particle lifetime is set in `ParticleController.cs`; bounciness is set in `Particle.compute`.
+Particle positions and velocities are stored in a GPU buffer. The D20 object's mesh faces are converted to local-space planes at startup for collision checks.

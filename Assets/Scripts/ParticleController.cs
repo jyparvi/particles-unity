@@ -27,12 +27,9 @@ public class ParticleController : MonoBehaviour
     [Range(0.0f, 1.0f)] public float filmGrainAmount;
 
     [SerializeField, HideInInspector] private MeshFilter d20Mesh;
-    [SerializeField, HideInInspector] private float spawnDistance;
-    [SerializeField, HideInInspector] private float initialSpawnSpread;
 
     private ComputeBuffer particleBuffer;
     private ComputeBuffer d20PlaneBuffer;
-    private Renderer d20Renderer;
     private Bounds drawBounds;
     private Matrix4x4 prevD20WorldToLocal = Matrix4x4.identity;
     private GUIStyle hudStyle;
@@ -41,20 +38,12 @@ public class ParticleController : MonoBehaviour
     private Bloom bloom;
     private FilmGrain filmGrain;
 
-    private const float ParticleLifetime = 7.0f;
     private const int ThreadGroupSize = 256;
     private const int MaxParticleCount = 1000000;
 
     private int kernel;
+    private bool initializeParticles;
     
-    private struct Particle
-    {
-        public Vector3 position;
-        public Vector3 velocity;
-        public float age;
-        public uint randomState;
-    }
-
     // Enable the post-processing volume and store the D20 object's current transform.
     void OnEnable()
     {
@@ -75,26 +64,22 @@ public class ParticleController : MonoBehaviour
         }
     }
 
-    // Initialize shader settings, fixed draw bounds, post-processing, and GPU buffers.
+    // Initialize settings and build collision planes.
     void Start()
     {
         kernel = computeShader.FindKernel("CSMain");
-        particleCount = Mathf.Clamp(particleCount, 1, MaxParticleCount);
-        computeShader.SetFloat("particleLifetime", ParticleLifetime);
-        d20Renderer = d20Mesh.GetComponent<Renderer>();
-        drawBounds = new Bounds(d20Renderer.bounds.center, Vector3.one * 100.0f);
+        drawBounds = new Bounds(Vector3.zero, Vector3.one * 100.0f);
         prevD20WorldToLocal = d20Mesh.transform.worldToLocalMatrix;
 
         SetupPostProcessing();
         BuildD20Planes();
-        RebuildParticleBuffer();
     }
 
     // Rotate the D20 object, update settings, and dispatch the particle simulation.
     void Update()
     {
         particleCount = Mathf.Clamp(particleCount, 1, MaxParticleCount);
-        if (particleCount != particleBuffer.count)
+        if (particleBuffer == null || particleCount != particleBuffer.count)
         {
             RebuildParticleBuffer();
         }
@@ -102,18 +87,32 @@ public class ParticleController : MonoBehaviour
 
         d20Mesh.transform.Rotate(d20RotationSpeed * Time.deltaTime, Space.World);
 
+        computeShader.SetInt("initializeParticles", initializeParticles ? 1 : 0);
+        computeShader.SetInt("frameIndex", Time.frameCount);
         computeShader.SetFloat("deltaTime", Time.deltaTime);
-        computeShader.SetVector("spawnCenter", d20Renderer.bounds.center);
-        computeShader.SetFloat("spawnDistance", spawnDistance);
         computeShader.SetFloat("minSpeed", minSpeed);
         computeShader.SetFloat("maxSpeed", maxSpeed);
-        computeShader.SetBuffer(kernel, "particles", particleBuffer);
 
-        SetD20Parameters();
-        SetMaterialParameters();
+        Transform d20Transform = d20Mesh.transform;
+        Matrix4x4 d20WorldToLocal = d20Transform.worldToLocalMatrix;
+        particleMaterial.SetMatrix("_D20WorldToLocal", d20WorldToLocal);
+        computeShader.SetMatrix("d20WorldToLocal", d20WorldToLocal);
+        computeShader.SetMatrix("prevD20WorldToLocal", prevD20WorldToLocal);
+        computeShader.SetMatrix("d20LocalToWorld", d20Transform.localToWorldMatrix);
+        prevD20WorldToLocal = d20WorldToLocal;
+
+        particleMaterial.SetColor("_FarParticleColor", farParticleColor);
+        particleMaterial.SetColor("_NearParticleColor", nearParticleColor);
+        particleMaterial.SetFloat("_ParticleSize", particleSize);
+        particleMaterial.SetFloat("_VelocityStretch", velocityStretch);
+        particleMaterial.SetColor("_GlowColor", glowColor);
+        particleMaterial.SetFloat("_GlowIntensity", enableGlow ? glowIntensity : 0.0f);
+        particleMaterial.SetFloat("_GlowSharpness", glowSharpness);
 
         int threadGroups = Mathf.CeilToInt((float)particleCount / ThreadGroupSize);
         computeShader.Dispatch(kernel, threadGroups, 1, 1);
+
+        initializeParticles = false;
     }
 
     // Draw the particle count and current FPS.
@@ -170,7 +169,7 @@ public class ParticleController : MonoBehaviour
         }
     }
 
-    // Recreate and initialize the particle buffer, then bind it to the material.
+    // Recreate the particle buffer for shader initialization, then bind it to the material.
     private void RebuildParticleBuffer()
     {
         if (particleBuffer != null)
@@ -178,38 +177,11 @@ public class ParticleController : MonoBehaviour
             particleBuffer.Release();
         }
         
-        particleBuffer = new ComputeBuffer(particleCount, sizeof(float) * 7 + sizeof(uint));
-
-        Particle[] particles = new Particle[particleCount];
-        Vector3 spawnCenter = d20Renderer.bounds.center;
-
-        for (int i = 0; i < particleCount; i++)
-        {
-            Vector3 direction = Random.onUnitSphere;
-            particles[i].position = spawnCenter + direction * spawnDistance;
-            particles[i].velocity = -direction * Random.Range(minSpeed, maxSpeed);
-            particles[i].age = -Random.Range(0.0f, initialSpawnSpread);
-            particles[i].randomState = (uint)Random.Range(1, int.MaxValue);
-        }
-
-        particleBuffer.SetData(particles);
+        particleBuffer = new ComputeBuffer(particleCount, sizeof(float) * 6);
+        initializeParticles = true;
         particleMaterial.SetBuffer("_Particles", particleBuffer);
-
+        computeShader.SetBuffer(kernel, "particles", particleBuffer);
         computeShader.SetInt("particleCount", particleCount);
-    }
-
-    // Set collision data for the D20 object and save its transform for the next frame.
-    private void SetD20Parameters()
-    {
-        computeShader.SetBuffer(kernel, "d20Planes", d20PlaneBuffer);
-
-        Transform d20Transform = d20Mesh.transform;
-        Matrix4x4 d20WorldToLocal = d20Transform.worldToLocalMatrix;
-        computeShader.SetInt("d20PlaneCount", d20PlaneBuffer.count);
-        computeShader.SetMatrix("d20WorldToLocal", d20WorldToLocal);
-        computeShader.SetMatrix("prevD20WorldToLocal", prevD20WorldToLocal);
-        computeShader.SetMatrix("d20LocalToWorld", d20Transform.localToWorldMatrix);
-        prevD20WorldToLocal = d20WorldToLocal;
     }
 
     // Build and upload normalized outward planes in the D20 object's local space.
@@ -240,20 +212,9 @@ public class ParticleController : MonoBehaviour
 
         d20PlaneBuffer = new ComputeBuffer(planes.Count, sizeof(float) * 4);
         d20PlaneBuffer.SetData(planes);
-    }
-
-    // Update particle appearance and surface-distance parameters for the D20 object.
-    private void SetMaterialParameters()
-    {
-        particleMaterial.SetColor("_FarParticleColor", farParticleColor);
-        particleMaterial.SetColor("_NearParticleColor", nearParticleColor);
-        particleMaterial.SetFloat("_ParticleSize", particleSize);
-        particleMaterial.SetFloat("_VelocityStretch", velocityStretch);
-        particleMaterial.SetColor("_GlowColor", glowColor);
-        particleMaterial.SetFloat("_GlowIntensity", enableGlow ? glowIntensity : 0.0f);
-        particleMaterial.SetFloat("_GlowSharpness", glowSharpness);
+        computeShader.SetBuffer(kernel, "d20Planes", d20PlaneBuffer);
+        computeShader.SetInt("d20PlaneCount", d20PlaneBuffer.count);
         particleMaterial.SetBuffer("_D20Planes", d20PlaneBuffer);
-        particleMaterial.SetMatrix("_D20WorldToLocal", d20Mesh.transform.worldToLocalMatrix);
         particleMaterial.SetInt("_D20PlaneCount", d20PlaneBuffer.count);
     }
 

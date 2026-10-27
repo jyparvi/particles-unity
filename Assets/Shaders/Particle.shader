@@ -38,8 +38,6 @@ Shader "Custom/GPUParticles"
             {
                 float3 position;
                 float3 velocity;
-                float age;
-                uint randomState;
             };
 
             StructuredBuffer<Particle> _Particles;
@@ -53,7 +51,7 @@ Shader "Custom/GPUParticles"
             float _GlowIntensity;
             float _GlowSharpness;
             float4x4 _D20WorldToLocal;
-            int _D20PlaneCount;
+            uint _D20PlaneCount;
 
             static const float ColorTransitionDistance = 4.0f;
             static const float2 QuadVertices[6] =
@@ -66,14 +64,9 @@ Shader "Custom/GPUParticles"
                 float2( 1.0f,  1.0f)
             };
 
-            struct Attributes
-            {
-                uint vertexID : SV_VertexID;
-            };
-
             struct Varyings
             {
-                float4 positionHCS : SV_POSITION;
+                float4 position : SV_POSITION;
                 float2 uv : TEXCOORD0;
                 half4 color : COLOR0;
             };
@@ -83,7 +76,7 @@ Shader "Custom/GPUParticles"
             {
                 float3 localPosition = mul(_D20WorldToLocal, float4(worldPosition, 1.0f)).xyz;
                 float signedDistance = -1.0e+30f;
-                for (int i = 0; i < _D20PlaneCount; i++)
+                for (uint i = 0; i < _D20PlaneCount; i++)
                 {
                     float4 plane = _D20Planes[i];
                     signedDistance = max(signedDistance, dot(plane.xyz, localPosition) + plane.w);
@@ -93,15 +86,15 @@ Shader "Custom/GPUParticles"
             }
 
             // Compute a camera-facing particle vertex with velocity-based stretching and distance-based color.
-            Varyings vert(Attributes IN)
+            Varyings vert(uint vertexID : SV_VertexID)
             {
                 Varyings OUT;
 
-                Particle particle = _Particles[IN.vertexID / 6];
+                Particle particle = _Particles[vertexID / 6];
 
-                OUT.positionHCS = particle.age >= 0.0f ? TransformWorldToHClip(particle.position) : float4(2.0f, 2.0f, 2.0f, 1.0f);
+                OUT.position = TransformWorldToHClip(particle.position);
 
-                float2 corner = QuadVertices[IN.vertexID % 6];
+                float2 corner = QuadVertices[vertexID % 6];
                 float2 billboardOffset = corner * _ParticleSize;
                 float2 viewVelocity = TransformWorldToViewDir(particle.velocity).xy;
                 float viewSpeed = length(viewVelocity);
@@ -114,7 +107,7 @@ Shader "Custom/GPUParticles"
                     billboardOffset = sideDirection * corner.x * _ParticleSize + motionDirection * corner.y * halfLength;
                 }
 
-                OUT.positionHCS.xy += billboardOffset * float2(UNITY_MATRIX_P._m00, UNITY_MATRIX_P._m11);
+                OUT.position.xy += billboardOffset * float2(UNITY_MATRIX_P._m00, UNITY_MATRIX_P._m11);
                 OUT.uv = corner * 0.5f + 0.5f;
                 float nearSurface = saturate(1.0f - DistanceToD20Surface(particle.position) / ColorTransitionDistance);
                 OUT.color = lerp(_FarParticleColor, _NearParticleColor, nearSurface);

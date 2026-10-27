@@ -588,8 +588,6 @@ MonoBehaviour:
   bloomAmount: 1
   filmGrainAmount: 0.5
   d20Mesh: {fileID: 78408690}
-  spawnDistance: 6
-  initialSpawnSpread: 7
 --- !u!4 &1615308410
 Transform:
   m_ObjectHideFlags: 0
