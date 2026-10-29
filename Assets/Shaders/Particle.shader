@@ -76,7 +76,7 @@ Shader "Custom/GPUParticles"
             {
                 float3 localPosition = mul(_D20WorldToLocal, float4(worldPosition, 1.0f)).xyz;
                 float signedDistance = -1.0e+30f;
-                for (uint i = 0; i < _D20PlaneCount; i++)
+                for (uint i = 0u; i < _D20PlaneCount; i++)
                 {
                     float4 plane = _D20Planes[i];
                     signedDistance = max(signedDistance, dot(plane.xyz, localPosition) + plane.w);

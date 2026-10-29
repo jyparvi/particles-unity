@@ -191,7 +191,6 @@ public class ParticleController : MonoBehaviour
         Mesh mesh = d20Mesh.sharedMesh;
         Vector3[] vertices = mesh.vertices;
         int[] triangles = mesh.triangles;
-        Vector3 center = mesh.bounds.center;
 
         for (int i = 0; i < triangles.Length; i += 3)
         {
@@ -201,8 +200,7 @@ public class ParticleController : MonoBehaviour
             Vector3 normal = Vector3.Cross(b - a, c - a);
 
             normal.Normalize();
-
-            if (Vector3.Dot(normal, a - center) < 0.0f)
+            if (Vector3.Dot(normal, a) < 0.0f)
             {
                 normal = -normal;
             }
@@ -215,7 +213,7 @@ public class ParticleController : MonoBehaviour
         computeShader.SetBuffer(kernel, "d20Planes", d20PlaneBuffer);
         computeShader.SetInt("d20PlaneCount", d20PlaneBuffer.count);
         particleMaterial.SetBuffer("_D20Planes", d20PlaneBuffer);
-        particleMaterial.SetInt("_D20PlaneCount", d20PlaneBuffer.count);
+        particleMaterial.SetInteger("_D20PlaneCount", d20PlaneBuffer.count);
     }
 
     // Create a global volume and runtime profile for bloom and film grain.

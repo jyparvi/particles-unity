@@ -54,7 +54,7 @@ bool IntersectSegmentWithD20(float3 origin, float3 direction, out float hitTime,
     localNormal = 0.0f;
     float exitTime = 1.0f;
 
-    for (uint i = 0; i < d20PlaneCount; i++)
+    for (uint i = 0u; i < d20PlaneCount; i++)
     {
         float4 plane = d20Planes[i];
         float distance = dot(plane.xyz, origin) + plane.w;
@@ -100,7 +100,7 @@ bool FindContainingFace(float3 samplePosition, out float3 localNormal, out float
     localNormal = 0.0f;
     signedDistance = -1.0e+30f;
 
-    for (uint i = 0; i < d20PlaneCount; i++)
+    for (uint i = 0u; i < d20PlaneCount; i++)
     {
         float4 plane = d20Planes[i];
         float distance = dot(plane.xyz, samplePosition) + plane.w;
@@ -145,7 +145,7 @@ void CSMain(uint3 id : SV_DispatchThreadID)
     }
 
     Particle p;
-    if (initializeParticles != 0)
+    if (initializeParticles != 0u)
     {
         SpawnParticle(p, id.x, true);
     }
