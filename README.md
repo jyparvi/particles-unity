@@ -2,9 +2,9 @@
 
 A particle simulation in Unity using compute shaders and the Universal Render Pipeline (URP). Particles bounce off a rotating D20 object and respawn on an outer sphere.
 
-![500 glowing particles around the D20 object](docs/images/1.png)
+![1.png](docs/images/1.png)
 
-![4,000 stretched glowing particles around the D20 object](docs/images/2.png)
+![2.png](docs/images/2.png)
 
 ## Features
 
@@ -20,7 +20,7 @@ A particle simulation in Unity using compute shaders and the Universal Render Pi
 
 - **Unity 6.3 LTS, version 6000.3.22f1**.
 - **URP 17.3.0**, restored automatically from the project's package files.
-- A GPU and graphics API that support [Unity compute shaders](https://docs.unity3d.com/6000.3/Documentation/Manual/class-ComputeShader-introduction.html), such as Metal on macOS or DirectX 11/12 on Windows.
+- A GPU and graphics API that support compute shaders.
 
 ## Run the demo
 
@@ -28,9 +28,9 @@ A particle simulation in Unity using compute shaders and the Universal Render Pi
 2. Add the repository folder to Unity Hub and open it with Unity **6000.3.22f1**.
 3. Wait for Unity to restore packages and import the assets.
 4. Use **File > Open Scene** to open `Assets/Scenes/Particles.unity`.
-5. Press **Play**.
+5. Click the **Play (▶)** button in the toolbar.
 
-The scene starts with **500 particles**. Select the **Particles** object in the Hierarchy to adjust its **Particle Controller** settings in the Inspector, before or during Play mode. The D20 object rotates automatically.
+The scene starts with **500 particles**. Select the **Particles** object in the Hierarchy to adjust its settings in the Inspector. During Play mode, select the same object to adjust runtime settings. Runtime changes are temporary. The D20 object rotates automatically.
 
 ## Settings
 
@@ -45,14 +45,15 @@ The scene starts with **500 particles**. Select the **Particles** object in the 
 | Enable Glow / Glow Color / Glow Intensity / Glow Sharpness | Control the glow within each particle. |
 | Bloom Amount / Film Grain Amount | Control the post-processing effects. |
 
-Changing Particle Count recreates the particle buffer and restarts the particles. The upper limit is a code limit, not a performance guarantee; performance depends on the GPU and settings. Inspector changes made during Play mode are temporary.
+Changing Particle Count recreates the GPU particle buffer and restarts the particles. Inspector changes made during Play mode are temporary.
 
 ## Source files
 
 | File | Purpose |
 | --- | --- |
-| [ParticleController.cs](Assets/Scripts/ParticleController.cs) | Initializes GPU buffers, extracts D20 collision planes, updates settings, dispatches the simulation, and draws the particles and FPS display. |
+| [ParticleController.cs](Assets/Scripts/ParticleController.cs) | Particle settings, GPU buffers, D20 collision planes, compute dispatch, particle rendering, and particle count and FPS display. |
 | [Particle.compute](Assets/Shaders/Particle.compute) | Initializes particles, updates their positions, respawns them at the outer sphere, and resolves D20 collisions on the GPU. |
 | [Particle.shader](Assets/Shaders/Particle.shader) | Creates particle billboards and applies stretching, surface-distance colors, glow, and soft circular edges. |
+| [Particles.unity](Assets/Scenes/Particles.unity) | Demo scene, camera, lighting, D20 and sphere meshes, and particle settings. |
 
 Particle positions and velocities are stored in a GPU buffer. The D20 object's mesh faces are converted to local-space planes at startup for collision checks.
