@@ -44,10 +44,10 @@ Shader "Custom/GPUParticles"
             StructuredBuffer<float4> _D20Planes;
 
             float _ParticleSize;
-            float4 _FarParticleColor;
-            float4 _NearParticleColor;
+            float3 _FarParticleColor;
+            float3 _NearParticleColor;
             float _VelocityStretch;
-            float4 _GlowColor;
+            float3 _GlowColor;
             float _GlowIntensity;
             float _GlowSharpness;
             float4x4 _D20WorldToLocal;
@@ -68,7 +68,7 @@ Shader "Custom/GPUParticles"
             {
                 float4 position : SV_POSITION;
                 float2 uv : TEXCOORD0;
-                half4 color : COLOR0;
+                half3 color : COLOR0;
             };
 
             // Approximate the particle's distance to the D20 object's surface.
@@ -122,9 +122,9 @@ Shader "Custom/GPUParticles"
                 float edge = 1.0f - smoothstep(0.84f, 1.0f, radius);
                 float core = pow(saturate(1.0f - radius), max(_GlowSharpness, 0.01f));
                 float glow = core * _GlowIntensity;
-                float3 color = lerp(IN.color.rgb, _GlowColor.rgb, saturate(glow)) * (1.0f + glow);
+                float3 color = lerp(IN.color, _GlowColor, saturate(glow)) * (1.0f + glow);
 
-                return half4(color, IN.color.a * edge);
+                return half4(color, edge);
             }
 
             ENDHLSL

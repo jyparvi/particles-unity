@@ -13,12 +13,12 @@ public class ParticleController : MonoBehaviour
     [Min(0.0f)] public float maxSpeed;
     [Range(0.0f, 0.5f)] public float velocityStretch;
     public Vector3 d20RotationSpeed;
-    [ColorUsage(true, true)] public Color nearParticleColor;
-    [ColorUsage(true, true)] public Color farParticleColor;
+    [ColorUsage(false)] public Color nearParticleColor;
+    [ColorUsage(false)] public Color farParticleColor;
     
     [Header("Glow")]
     public bool enableGlow;
-    [ColorUsage(true, true)] public Color glowColor;
+    [ColorUsage(false)] public Color glowColor;
     [Range(0.0f, 10.0f)] public float glowIntensity;
     [Range(0.25f, 8.0f)] public float glowSharpness;
     
